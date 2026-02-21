@@ -3,7 +3,14 @@
 A portfolio-focused Kanban-style to-do app built with plain HTML, CSS, and vanilla JavaScript.
 
 ## Current Status
-- Responsive 3-column board scaffold: `Todo`, `In Progress`, `Done`
+- Responsive 3-column board: `Todo`, `In Progress`, `Done`
+- Task workflow:
+  - Add new task to any column
+  - Delete existing task
+  - Task counts update per column
+- Persistence:
+  - Board state stored in `localStorage`
+  - Data is sanitized on load to avoid invalid entries
 - Dot-matrix background using pure CSS `radial-gradient`
 - Theme system:
   - Auto-detects OS theme with `prefers-color-scheme`
@@ -23,6 +30,8 @@ A portfolio-focused Kanban-style to-do app built with plain HTML, CSS, and vanil
 │  └─ styles.css
 └─ js/
    ├─ app.js
+   ├─ board.js
+   ├─ storage.js
    └─ theme.js
 ```
 
@@ -37,9 +46,7 @@ python3 -m http.server 5500
 Then visit `http://localhost:5500`.
 
 ## Roadmap
-- Add/create/delete tasks
 - Drag-and-drop across columns (native HTML DnD API)
-- Persist board data in `localStorage`
 - Task edit + priority tags
 - Smooth drag transitions
 
