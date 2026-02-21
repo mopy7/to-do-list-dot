@@ -7,6 +7,7 @@ A portfolio-focused Kanban-style to-do app built with plain HTML, CSS, and vanil
 - Task workflow:
   - Add new task to any column
   - Delete existing task
+  - Edit existing task titles inline
   - Task counts update per column
 - Drag and drop:
   - Native HTML Drag and Drop API
@@ -50,7 +51,7 @@ python3 -m http.server 5500
 Then visit `http://localhost:5500`.
 
 ## Roadmap
-- Task edit + priority tags
+- Priority tags
 - Smooth drag transitions
 
 ## Git Workflow

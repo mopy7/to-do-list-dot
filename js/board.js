@@ -2,6 +2,7 @@ import { loadBoard, saveBoard } from "./storage.js";
 
 const COLUMN_IDS = ["todo", "in-progress", "done"];
 const DND_MIME = "application/x-kanban-task";
+const MAX_TITLE_LENGTH = 120;
 
 export function initBoard() {
   const form = document.querySelector("[data-task-form]");
@@ -21,12 +22,13 @@ export function initBoard() {
   let board = loadBoard();
   let draggingTaskId = "";
   let draggingSourceColumn = "";
-  renderBoard(board, taskLists, taskCounts);
+  const editState = { taskId: "", columnId: "" };
+  renderBoard(board, taskLists, taskCounts, editState);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    const title = input.value.trim();
+    const title = input.value.trim().slice(0, MAX_TITLE_LENGTH);
     const columnId = COLUMN_IDS.includes(columnSelect.value)
       ? columnSelect.value
       : "todo";
@@ -41,7 +43,7 @@ export function initBoard() {
     });
 
     saveBoard(board);
-    renderBoard(board, taskLists, taskCounts);
+    renderBoard(board, taskLists, taskCounts, editState);
 
     const nextColumn = columnId;
     form.reset();
@@ -55,30 +57,106 @@ export function initBoard() {
       return;
     }
 
+    const cancelButton = target.closest("[data-cancel-edit]");
+    if (cancelButton) {
+      setEditingTask(editState);
+      renderBoard(board, taskLists, taskCounts, editState);
+      return;
+    }
+
+    const editButton = target.closest("[data-edit-task]");
+    if (editButton) {
+      const taskCard = editButton.closest("[data-task-id]");
+      if (!(taskCard instanceof HTMLElement)) {
+        return;
+      }
+
+      const taskId = taskCard.dataset.taskId;
+      const preferredColumn = taskCard.dataset.taskColumn;
+      if (!taskId) {
+        return;
+      }
+
+      const taskReference = findTaskReference(board, taskId, preferredColumn);
+      if (!taskReference) {
+        return;
+      }
+
+      setEditingTask(editState, taskReference.task.id, taskReference.columnId);
+      renderBoard(board, taskLists, taskCounts, editState);
+      focusTaskEditor(taskReference.task.id);
+      return;
+    }
+
     const deleteButton = target.closest("[data-delete-task]");
     if (!deleteButton) {
       return;
     }
 
     const taskCard = deleteButton.closest("[data-task-id]");
-    if (!taskCard) {
+    if (!(taskCard instanceof HTMLElement)) {
       return;
     }
 
     const taskId = taskCard.dataset.taskId;
-    const columnId = taskCard.dataset.taskColumn;
-    if (!taskId || !columnId || !COLUMN_IDS.includes(columnId)) {
+    const preferredColumn = taskCard.dataset.taskColumn;
+    if (!taskId) {
       return;
     }
 
-    const previousLength = board[columnId].length;
-    board[columnId] = board[columnId].filter((task) => task.id !== taskId);
-    if (board[columnId].length === previousLength) {
+    const taskReference = findTaskReference(board, taskId, preferredColumn);
+    if (!taskReference) {
       return;
+    }
+
+    board[taskReference.columnId].splice(taskReference.index, 1);
+    if (editState.taskId === taskId) {
+      setEditingTask(editState);
     }
 
     saveBoard(board);
-    renderBoard(board, taskLists, taskCounts);
+    renderBoard(board, taskLists, taskCounts, editState);
+  });
+
+  boardElement.addEventListener("submit", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLFormElement)) {
+      return;
+    }
+    if (!target.matches("[data-edit-form]")) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const taskId = typeof target.dataset.editForm === "string"
+      ? target.dataset.editForm.trim()
+      : "";
+    const preferredColumn = typeof target.dataset.editColumn === "string"
+      ? target.dataset.editColumn.trim()
+      : "";
+    const editInput = target.querySelector("[data-edit-input]");
+    if (!(editInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const nextTitle = editInput.value.trim().slice(0, MAX_TITLE_LENGTH);
+    if (!nextTitle) {
+      editInput.focus();
+      return;
+    }
+
+    const taskReference = findTaskReference(board, taskId, preferredColumn);
+    if (!taskReference) {
+      setEditingTask(editState);
+      renderBoard(board, taskLists, taskCounts, editState);
+      return;
+    }
+
+    taskReference.task.title = nextTitle;
+    saveBoard(board);
+    setEditingTask(editState);
+    renderBoard(board, taskLists, taskCounts, editState);
   });
 
   for (const columnId of COLUMN_IDS) {
@@ -143,14 +221,21 @@ export function initBoard() {
       }
 
       board[targetColumn].unshift(movedTask);
+      if (editState.taskId === movedTask.id) {
+        editState.columnId = targetColumn;
+      }
+
       saveBoard(board);
-      renderBoard(board, taskLists, taskCounts);
+      renderBoard(board, taskLists, taskCounts, editState);
     });
   }
 
   boardElement.addEventListener("dragstart", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (target.closest("button, input, select, textarea, form")) {
       return;
     }
 
@@ -198,7 +283,7 @@ export function initBoard() {
   });
 }
 
-function renderBoard(board, taskLists, taskCounts) {
+function renderBoard(board, taskLists, taskCounts, editState) {
   for (const columnId of COLUMN_IDS) {
     const listElement = taskLists[columnId];
     const countElement = taskCounts[columnId];
@@ -217,13 +302,18 @@ function renderBoard(board, taskLists, taskCounts) {
 
     const fragment = document.createDocumentFragment();
     for (const task of tasks) {
-      fragment.appendChild(createTaskCard(task, columnId));
+      fragment.appendChild(createTaskCard(task, columnId, editState));
     }
     listElement.appendChild(fragment);
   }
 }
 
-function createTaskCard(task, columnId) {
+function createTaskCard(task, columnId, editState) {
+  const isEditing = editState.taskId === task.id && editState.columnId === columnId;
+  if (isEditing) {
+    return createTaskEditorCard(task, columnId);
+  }
+
   const card = document.createElement("article");
   card.className = "task-card";
   card.draggable = true;
@@ -234,14 +324,65 @@ function createTaskCard(task, columnId) {
   title.className = "task-title";
   title.textContent = task.title;
 
+  const actions = document.createElement("div");
+  actions.className = "task-actions";
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.className = "task-action-btn";
+  editButton.dataset.editTask = "true";
+  editButton.setAttribute("aria-label", `Edit task: ${task.title}`);
+  editButton.textContent = "Edit";
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.className = "task-delete";
+  deleteButton.className = "task-action-btn task-delete";
   deleteButton.dataset.deleteTask = "true";
   deleteButton.setAttribute("aria-label", `Delete task: ${task.title}`);
   deleteButton.textContent = "Delete";
 
-  card.append(title, deleteButton);
+  actions.append(editButton, deleteButton);
+  card.append(title, actions);
+  return card;
+}
+
+function createTaskEditorCard(task, columnId) {
+  const card = document.createElement("article");
+  card.className = "task-card is-editing";
+  card.draggable = false;
+  card.dataset.taskId = task.id;
+  card.dataset.taskColumn = columnId;
+
+  const editForm = document.createElement("form");
+  editForm.className = "task-edit-form";
+  editForm.dataset.editForm = task.id;
+  editForm.dataset.editColumn = columnId;
+
+  const editInput = document.createElement("input");
+  editInput.type = "text";
+  editInput.className = "task-edit-input";
+  editInput.dataset.editInput = "true";
+  editInput.maxLength = MAX_TITLE_LENGTH;
+  editInput.value = task.title;
+  editInput.required = true;
+
+  const actions = document.createElement("div");
+  actions.className = "task-edit-actions";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.className = "task-action-btn";
+  saveButton.textContent = "Save";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "task-action-btn";
+  cancelButton.dataset.cancelEdit = "true";
+  cancelButton.textContent = "Cancel";
+
+  actions.append(saveButton, cancelButton);
+  editForm.append(editInput, actions);
+  card.append(editForm);
   return card;
 }
 
@@ -352,6 +493,51 @@ function detachTask(board, taskId, preferredColumn) {
   return null;
 }
 
+function findTaskReference(board, taskId, preferredColumn) {
+  const orderedColumns = COLUMN_IDS.includes(preferredColumn)
+    ? [preferredColumn, ...COLUMN_IDS.filter((id) => id !== preferredColumn)]
+    : [...COLUMN_IDS];
+
+  for (const columnId of orderedColumns) {
+    const tasks = board[columnId];
+    if (!Array.isArray(tasks)) {
+      continue;
+    }
+    const index = tasks.findIndex((task) => task.id === taskId);
+    if (index === -1) {
+      continue;
+    }
+    return {
+      task: tasks[index],
+      columnId,
+      index,
+    };
+  }
+
+  return null;
+}
+
 function isDropAllowed(targetColumn, sourceColumn) {
   return COLUMN_IDS.includes(targetColumn) && targetColumn !== sourceColumn;
+}
+
+function setEditingTask(editState, taskId = "", columnId = "") {
+  editState.taskId = taskId;
+  editState.columnId = columnId;
+}
+
+function focusTaskEditor(taskId) {
+  const taskCards = document.querySelectorAll("[data-task-id]");
+  for (const card of taskCards) {
+    if (!(card instanceof HTMLElement) || card.dataset.taskId !== taskId) {
+      continue;
+    }
+    const input = card.querySelector("[data-edit-input]");
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    input.focus();
+    input.select();
+    return;
+  }
 }

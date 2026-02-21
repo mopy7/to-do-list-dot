@@ -144,7 +144,8 @@ body {
 .task-input:focus-visible,
 .task-select:focus-visible,
 .task-submit:focus-visible,
-.task-delete:focus-visible {
+.task-action-btn:focus-visible,
+.task-edit-input:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
@@ -235,6 +236,10 @@ body {
   transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease;
 }
 
+.task-card.is-editing {
+  cursor: default;
+}
+
 .task-card:active {
   cursor: grabbing;
 }
@@ -248,10 +253,17 @@ body {
 .task-title {
   margin: 0;
   word-break: break-word;
+  flex: 1;
 }
 
-.task-delete {
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
+}
+
+.task-action-btn {
   border: 1px solid var(--border);
   background: var(--surface-soft);
   color: var(--text);
@@ -259,6 +271,31 @@ body {
   padding: 4px 8px;
   cursor: pointer;
   line-height: 1.2;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.task-edit-form {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.task-edit-input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.task-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 @media (max-width: 620px) {
