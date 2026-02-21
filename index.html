@@ -14,6 +14,28 @@
       </button>
     </header>
 
+    <section class="composer-wrap" aria-label="Add task">
+      <form class="task-form" data-task-form>
+        <label class="sr-only" for="task-input">Task title</label>
+        <input
+          id="task-input"
+          class="task-input"
+          data-task-input
+          type="text"
+          maxlength="120"
+          placeholder="Add a task..."
+          required
+        />
+        <label class="sr-only" for="task-column">Column</label>
+        <select id="task-column" class="task-select" data-task-column>
+          <option value="todo">Todo</option>
+          <option value="in-progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+        <button type="submit" class="task-submit">Add Task</button>
+      </form>
+    </section>
+
     <main class="board" aria-label="Kanban board">
       <section class="column" data-column="todo" aria-labelledby="todo-title">
         <div class="column-header">
