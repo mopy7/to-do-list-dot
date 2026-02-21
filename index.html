@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kanban To-Do</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Kanban To-Do</h1>
+      <button type="button" class="theme-toggle" data-theme-toggle>
+        Dark mode
+      </button>
+    </header>
+
+    <main class="board" aria-label="Kanban board">
+      <section class="column" data-column="todo" aria-labelledby="todo-title">
+        <div class="column-header">
+          <h2 id="todo-title">Todo</h2>
+          <span class="task-count" data-count="todo">0</span>
+        </div>
+        <div class="task-list" data-task-list="todo"></div>
+      </section>
+
+      <section
+        class="column"
+        data-column="in-progress"
+        aria-labelledby="in-progress-title"
+      >
+        <div class="column-header">
+          <h2 id="in-progress-title">In Progress</h2>
+          <span class="task-count" data-count="in-progress">0</span>
+        </div>
+        <div class="task-list" data-task-list="in-progress"></div>
+      </section>
+
+      <section class="column" data-column="done" aria-labelledby="done-title">
+        <div class="column-header">
+          <h2 id="done-title">Done</h2>
+          <span class="task-count" data-count="done">0</span>
+        </div>
+        <div class="task-list" data-task-list="done"></div>
+      </section>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
