@@ -1,6 +1,7 @@
 import { loadBoard, saveBoard } from "./storage.js";
 
 const COLUMN_IDS = ["todo", "in-progress", "done"];
+const DND_MIME = "application/x-kanban-task";
 
 export function initBoard() {
   const form = document.querySelector("[data-task-form]");
@@ -18,6 +19,8 @@ export function initBoard() {
   }
 
   let board = loadBoard();
+  let draggingTaskId = "";
+  let draggingSourceColumn = "";
   renderBoard(board, taskLists, taskCounts);
 
   form.addEventListener("submit", (event) => {
@@ -77,6 +80,122 @@ export function initBoard() {
     saveBoard(board);
     renderBoard(board, taskLists, taskCounts);
   });
+
+  for (const columnId of COLUMN_IDS) {
+    const listElement = taskLists[columnId];
+    if (!listElement) {
+      continue;
+    }
+
+    listElement.addEventListener("dragenter", (event) => {
+      const targetColumn = listElement.dataset.taskList;
+      if (!targetColumn || !isDropAllowed(targetColumn, draggingSourceColumn)) {
+        return;
+      }
+      event.preventDefault();
+      listElement.classList.add("is-drop-target");
+    });
+
+    listElement.addEventListener("dragover", (event) => {
+      const targetColumn = listElement.dataset.taskList;
+      if (!targetColumn || !isDropAllowed(targetColumn, draggingSourceColumn)) {
+        return;
+      }
+      event.preventDefault();
+      listElement.classList.add("is-drop-target");
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+    });
+
+    listElement.addEventListener("dragleave", (event) => {
+      const relatedTarget = event.relatedTarget;
+      if (relatedTarget instanceof Node && listElement.contains(relatedTarget)) {
+        return;
+      }
+      listElement.classList.remove("is-drop-target");
+    });
+
+    listElement.addEventListener("drop", (event) => {
+      event.preventDefault();
+      clearDropTargets(taskLists);
+
+      const targetColumn = listElement.dataset.taskList;
+      if (!targetColumn || !COLUMN_IDS.includes(targetColumn)) {
+        return;
+      }
+
+      const payload = readDragPayload(
+        event.dataTransfer,
+        draggingTaskId,
+        draggingSourceColumn
+      );
+      if (!payload) {
+        return;
+      }
+      if (payload.sourceColumn === targetColumn) {
+        return;
+      }
+
+      const movedTask = detachTask(board, payload.taskId, payload.sourceColumn);
+      if (!movedTask) {
+        return;
+      }
+
+      board[targetColumn].unshift(movedTask);
+      saveBoard(board);
+      renderBoard(board, taskLists, taskCounts);
+    });
+  }
+
+  boardElement.addEventListener("dragstart", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const taskCard = target.closest("[data-task-id]");
+    if (!(taskCard instanceof HTMLElement)) {
+      return;
+    }
+
+    const taskId = taskCard.dataset.taskId;
+    const sourceColumn = taskCard.dataset.taskColumn;
+    if (!taskId || !sourceColumn || !COLUMN_IDS.includes(sourceColumn)) {
+      return;
+    }
+    if (!event.dataTransfer) {
+      return;
+    }
+
+    draggingTaskId = taskId;
+    draggingSourceColumn = sourceColumn;
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", taskId);
+    event.dataTransfer.setData(
+      DND_MIME,
+      JSON.stringify({
+        taskId,
+        sourceColumn,
+      })
+    );
+
+    requestAnimationFrame(() => {
+      taskCard.classList.add("is-dragging");
+    });
+  });
+
+  boardElement.addEventListener("dragend", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement) {
+      target.classList.remove("is-dragging");
+    }
+
+    draggingTaskId = "";
+    draggingSourceColumn = "";
+    clearDropTargets(taskLists);
+  });
 }
 
 function renderBoard(board, taskLists, taskCounts) {
@@ -107,6 +226,7 @@ function renderBoard(board, taskLists, taskCounts) {
 function createTaskCard(task, columnId) {
   const card = document.createElement("article");
   card.className = "task-card";
+  card.draggable = true;
   card.dataset.taskId = task.id;
   card.dataset.taskColumn = columnId;
 
@@ -157,4 +277,81 @@ function createTaskId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function clearDropTargets(taskLists) {
+  for (const columnId of COLUMN_IDS) {
+    const listElement = taskLists[columnId];
+    if (!listElement) {
+      continue;
+    }
+    listElement.classList.remove("is-drop-target");
+  }
+}
+
+function readDragPayload(dataTransfer, fallbackTaskId, fallbackSourceColumn) {
+  let taskId = fallbackTaskId;
+  let sourceColumn = fallbackSourceColumn;
+
+  if (dataTransfer) {
+    const rawPayload = dataTransfer.getData(DND_MIME);
+    if (rawPayload) {
+      try {
+        const payload = JSON.parse(rawPayload);
+        if (payload && typeof payload === "object") {
+          const payloadTaskId =
+            typeof payload.taskId === "string" ? payload.taskId.trim() : "";
+          const payloadSourceColumn =
+            typeof payload.sourceColumn === "string"
+              ? payload.sourceColumn.trim()
+              : "";
+          if (payloadTaskId) {
+            taskId = payloadTaskId;
+          }
+          if (COLUMN_IDS.includes(payloadSourceColumn)) {
+            sourceColumn = payloadSourceColumn;
+          }
+        }
+      } catch {
+        // Ignore malformed drag payload and use fallback values.
+      }
+    }
+
+    if (!taskId) {
+      const textFallback = dataTransfer.getData("text/plain");
+      if (typeof textFallback === "string" && textFallback.trim()) {
+        taskId = textFallback.trim();
+      }
+    }
+  }
+
+  if (!taskId || !sourceColumn || !COLUMN_IDS.includes(sourceColumn)) {
+    return null;
+  }
+  return { taskId, sourceColumn };
+}
+
+function detachTask(board, taskId, preferredColumn) {
+  const orderedColumns = COLUMN_IDS.includes(preferredColumn)
+    ? [preferredColumn, ...COLUMN_IDS.filter((id) => id !== preferredColumn)]
+    : [...COLUMN_IDS];
+
+  for (const columnId of orderedColumns) {
+    const tasks = board[columnId];
+    if (!Array.isArray(tasks)) {
+      continue;
+    }
+    const taskIndex = tasks.findIndex((task) => task.id === taskId);
+    if (taskIndex === -1) {
+      continue;
+    }
+    const [task] = tasks.splice(taskIndex, 1);
+    return task || null;
+  }
+
+  return null;
+}
+
+function isDropAllowed(targetColumn, sourceColumn) {
+  return COLUMN_IDS.includes(targetColumn) && targetColumn !== sourceColumn;
 }

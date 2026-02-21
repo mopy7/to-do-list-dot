@@ -8,6 +8,10 @@ A portfolio-focused Kanban-style to-do app built with plain HTML, CSS, and vanil
   - Add new task to any column
   - Delete existing task
   - Task counts update per column
+- Drag and drop:
+  - Native HTML Drag and Drop API
+  - Move tasks between columns
+  - Drop outside a column is ignored safely
 - Persistence:
   - Board state stored in `localStorage`
   - Data is sanitized on load to avoid invalid entries
@@ -46,7 +50,6 @@ python3 -m http.server 5500
 Then visit `http://localhost:5500`.
 
 ## Roadmap
-- Drag-and-drop across columns (native HTML DnD API)
 - Task edit + priority tags
 - Smooth drag transitions
 
