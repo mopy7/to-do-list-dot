@@ -10,6 +10,7 @@ const PRIORITY_LABELS = {
 const DEFAULT_PRIORITY = "medium";
 const DND_MIME = "application/x-kanban-task";
 const MAX_TITLE_LENGTH = 120;
+const DROP_SETTLE_DURATION_MS = 180;
 
 export function initBoard() {
   const form = document.querySelector("[data-task-form]");
@@ -243,6 +244,7 @@ export function initBoard() {
 
       saveBoard(board);
       renderBoard(board, taskLists, taskCounts, editState);
+      applyDropSettleAnimation(taskLists, targetColumn, movedTask.id);
     });
   }
 
@@ -284,6 +286,7 @@ export function initBoard() {
 
     requestAnimationFrame(() => {
       taskCard.classList.add("is-dragging");
+      taskCard.classList.add("is-lifted");
     });
   });
 
@@ -291,6 +294,7 @@ export function initBoard() {
     const target = event.target;
     if (target instanceof HTMLElement) {
       target.classList.remove("is-dragging");
+      target.classList.remove("is-lifted");
     }
 
     draggingTaskId = "";
@@ -596,4 +600,27 @@ function parseColumnId(value) {
 function normalizePriority(value) {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   return PRIORITY_LEVELS.includes(normalized) ? normalized : DEFAULT_PRIORITY;
+}
+
+function applyDropSettleAnimation(taskLists, columnId, taskId) {
+  const listElement = taskLists[columnId];
+  if (!(listElement instanceof HTMLElement)) {
+    return;
+  }
+
+  const taskCards = listElement.querySelectorAll("[data-task-id]");
+  for (const card of taskCards) {
+    if (!(card instanceof HTMLElement) || card.dataset.taskId !== taskId) {
+      continue;
+    }
+
+    card.classList.remove("is-settling");
+    requestAnimationFrame(() => {
+      card.classList.add("is-settling");
+      window.setTimeout(() => {
+        card.classList.remove("is-settling");
+      }, DROP_SETTLE_DURATION_MS);
+    });
+    return;
+  }
 }
