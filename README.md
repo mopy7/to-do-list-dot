@@ -8,6 +8,7 @@ A portfolio-focused Kanban-style to-do app built with plain HTML, CSS, and vanil
   - Add new task to any column
   - Delete existing task
   - Edit existing task titles inline
+  - Priority tags (`High`, `Medium`, `Low`) with inline editing support
   - Task counts update per column
 - Drag and drop:
   - Native HTML Drag and Drop API
@@ -50,8 +51,18 @@ python3 -m http.server 5500
 
 Then visit `http://localhost:5500`.
 
+## GitHub Pages
+- This project is static and build-free, so it deploys directly from the repository.
+- Asset paths are relative (`css/styles.css`, `js/app.js`) to support repository subpaths.
+- `.nojekyll` is included to avoid Jekyll processing side effects.
+
+Deployment steps:
+1. Push `main` to GitHub.
+2. In repository settings, open `Pages`.
+3. Set source to `Deploy from a branch`.
+4. Select `main` and `/ (root)`.
+
 ## Roadmap
-- Priority tags
 - Smooth drag transitions
 
 ## Git Workflow

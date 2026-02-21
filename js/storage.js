@@ -1,5 +1,7 @@
 const BOARD_STORAGE_KEY = "kanban-board-v1";
 const COLUMN_IDS = ["todo", "in-progress", "done"];
+const PRIORITY_LEVELS = ["low", "medium", "high"];
+const DEFAULT_PRIORITY = "medium";
 
 export function createEmptyBoard() {
   return {
@@ -49,8 +51,14 @@ function sanitizeTask(value) {
   }
   const id = typeof value.id === "string" ? value.id.trim() : "";
   const title = typeof value.title === "string" ? value.title.trim() : "";
+  const priority = normalizePriority(value.priority);
   if (!id || !title) {
     return null;
   }
-  return { id, title: title.slice(0, 120) };
+  return { id, title: title.slice(0, 120), priority };
+}
+
+function normalizePriority(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return PRIORITY_LEVELS.includes(normalized) ? normalized : DEFAULT_PRIORITY;
 }

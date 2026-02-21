@@ -1,6 +1,13 @@
 import { loadBoard, saveBoard } from "./storage.js";
 
 const COLUMN_IDS = ["todo", "in-progress", "done"];
+const PRIORITY_LEVELS = ["low", "medium", "high"];
+const PRIORITY_LABELS = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+const DEFAULT_PRIORITY = "medium";
 const DND_MIME = "application/x-kanban-task";
 const MAX_TITLE_LENGTH = 120;
 
@@ -8,11 +15,12 @@ export function initBoard() {
   const form = document.querySelector("[data-task-form]");
   const input = document.querySelector("[data-task-input]");
   const columnSelect = document.querySelector("[data-task-column]");
+  const prioritySelect = document.querySelector("[data-task-priority]");
   const boardElement = document.querySelector(".board");
   const taskLists = getTaskListMap();
   const taskCounts = getTaskCountMap();
 
-  if (!form || !input || !columnSelect || !boardElement) {
+  if (!form || !input || !columnSelect || !prioritySelect || !boardElement) {
     return;
   }
   if (!hasAllColumns(taskLists) || !hasAllColumns(taskCounts)) {
@@ -29,9 +37,8 @@ export function initBoard() {
     event.preventDefault();
 
     const title = input.value.trim().slice(0, MAX_TITLE_LENGTH);
-    const columnId = COLUMN_IDS.includes(columnSelect.value)
-      ? columnSelect.value
-      : "todo";
+    const columnId = parseColumnId(columnSelect.value);
+    const priority = normalizePriority(prioritySelect.value);
     if (!title) {
       input.focus();
       return;
@@ -40,14 +47,15 @@ export function initBoard() {
     board[columnId].unshift({
       id: createTaskId(),
       title,
+      priority,
     });
 
     saveBoard(board);
     renderBoard(board, taskLists, taskCounts, editState);
 
-    const nextColumn = columnId;
     form.reset();
-    columnSelect.value = nextColumn;
+    columnSelect.value = columnId;
+    prioritySelect.value = DEFAULT_PRIORITY;
     input.focus();
   });
 
@@ -129,18 +137,25 @@ export function initBoard() {
 
     event.preventDefault();
 
-    const taskId = typeof target.dataset.editForm === "string"
-      ? target.dataset.editForm.trim()
-      : "";
-    const preferredColumn = typeof target.dataset.editColumn === "string"
-      ? target.dataset.editColumn.trim()
-      : "";
+    const taskId =
+      typeof target.dataset.editForm === "string"
+        ? target.dataset.editForm.trim()
+        : "";
+    const preferredColumn =
+      typeof target.dataset.editColumn === "string"
+        ? target.dataset.editColumn.trim()
+        : "";
     const editInput = target.querySelector("[data-edit-input]");
+    const editPriority = target.querySelector("[data-edit-priority]");
     if (!(editInput instanceof HTMLInputElement)) {
       return;
     }
 
     const nextTitle = editInput.value.trim().slice(0, MAX_TITLE_LENGTH);
+    const nextPriority =
+      editPriority instanceof HTMLSelectElement
+        ? normalizePriority(editPriority.value)
+        : DEFAULT_PRIORITY;
     if (!nextTitle) {
       editInput.focus();
       return;
@@ -154,6 +169,7 @@ export function initBoard() {
     }
 
     taskReference.task.title = nextTitle;
+    taskReference.task.priority = nextPriority;
     saveBoard(board);
     setEditingTask(editState);
     renderBoard(board, taskLists, taskCounts, editState);
@@ -314,15 +330,24 @@ function createTaskCard(task, columnId, editState) {
     return createTaskEditorCard(task, columnId);
   }
 
+  const priority = normalizePriority(task.priority);
+
   const card = document.createElement("article");
   card.className = "task-card";
   card.draggable = true;
   card.dataset.taskId = task.id;
   card.dataset.taskColumn = columnId;
 
+  const content = document.createElement("div");
+  content.className = "task-main";
+
   const title = document.createElement("p");
   title.className = "task-title";
   title.textContent = task.title;
+
+  const badge = document.createElement("span");
+  badge.className = `task-priority-badge is-${priority}`;
+  badge.textContent = PRIORITY_LABELS[priority];
 
   const actions = document.createElement("div");
   actions.className = "task-actions";
@@ -341,12 +366,15 @@ function createTaskCard(task, columnId, editState) {
   deleteButton.setAttribute("aria-label", `Delete task: ${task.title}`);
   deleteButton.textContent = "Delete";
 
+  content.append(title, badge);
   actions.append(editButton, deleteButton);
-  card.append(title, actions);
+  card.append(content, actions);
   return card;
 }
 
 function createTaskEditorCard(task, columnId) {
+  const priority = normalizePriority(task.priority);
+
   const card = document.createElement("article");
   card.className = "task-card is-editing";
   card.draggable = false;
@@ -358,6 +386,9 @@ function createTaskEditorCard(task, columnId) {
   editForm.dataset.editForm = task.id;
   editForm.dataset.editColumn = columnId;
 
+  const fields = document.createElement("div");
+  fields.className = "task-edit-fields";
+
   const editInput = document.createElement("input");
   editInput.type = "text";
   editInput.className = "task-edit-input";
@@ -365,6 +396,13 @@ function createTaskEditorCard(task, columnId) {
   editInput.maxLength = MAX_TITLE_LENGTH;
   editInput.value = task.title;
   editInput.required = true;
+
+  const editPriority = document.createElement("select");
+  editPriority.className = "task-edit-priority";
+  editPriority.dataset.editPriority = "true";
+  for (const level of PRIORITY_LEVELS) {
+    editPriority.append(createPriorityOption(level, level === priority));
+  }
 
   const actions = document.createElement("div");
   actions.className = "task-edit-actions";
@@ -380,10 +418,19 @@ function createTaskEditorCard(task, columnId) {
   cancelButton.dataset.cancelEdit = "true";
   cancelButton.textContent = "Cancel";
 
+  fields.append(editInput, editPriority);
   actions.append(saveButton, cancelButton);
-  editForm.append(editInput, actions);
+  editForm.append(fields, actions);
   card.append(editForm);
   return card;
+}
+
+function createPriorityOption(priority, isSelected) {
+  const option = document.createElement("option");
+  option.value = priority;
+  option.textContent = PRIORITY_LABELS[priority];
+  option.selected = isSelected;
+  return option;
 }
 
 function createEmptyState() {
@@ -540,4 +587,13 @@ function focusTaskEditor(taskId) {
     input.select();
     return;
   }
+}
+
+function parseColumnId(value) {
+  return COLUMN_IDS.includes(value) ? value : "todo";
+}
+
+function normalizePriority(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return PRIORITY_LEVELS.includes(normalized) ? normalized : DEFAULT_PRIORITY;
 }
